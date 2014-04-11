@@ -9,20 +9,6 @@ import docopt
 from subprocess import call
 
 ###############################################################################
-# TODO
-# docparser
-# add new notes
-#
-# Save all notes as individual files
-#
-# FEATURE ADDITIONS
-# Generate sql/html views of notes
-# note manager
-# add search
-# deletion
-###############################################################################
-
-###############################################################################
 # Create note class
 ###############################################################################
 class Note():
