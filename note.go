@@ -2,8 +2,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/docopt/docopt.go"
+	"os"
+//    "os/exec"
 	"path/filepath"
+	"strings"
 	"time"
+    "log"
 )
 
 func main() {
@@ -44,31 +49,69 @@ type Note struct {
 //******************************************************************************
 func NewNote(noteText string, noteName string, tagString string) *Note {
 
-	// TEXT
-	if !noteText {
-		noteText = ""
-	}
-
 	// PATH
-	if !noteName {
+	if noteName == "" {
 		noteName = time.Now().Format("2006-01-02_15:04:05")
 	}
 
+	var notePath string
 	if !filepath.IsAbs(noteName) {
 		notePath = filepath.Join(NOTEDIR, noteName)
 	} else {
 		notePath = noteName
 	}
 
+    if _,err := os.Stat(notePath); os.IsExist(err){
+        log.Fatal("Note already exists, choose new name.", notePath)
+    }
+
 	// TAGS
-	if !tagString {
+	if tagString == "" {
 		tagString = TAGID
 	}
-
-	noteTags = parseTagString(tagString)
+	noteTags := parseTagString(tagString)
 
 	return &Note{text: noteText, path: notePath, tags: noteTags}
 }
+
+//******************************************************************************
+// Note methods
+//******************************************************************************
+
+// write out note text
+// possibly return error in the future
+func (n *Note) WriteNote() {
+
+    //TODO check if file exists and handle name collisions
+
+    // if not, create the file
+    outFile,err := os.Create(n.path)
+    if err != nil {
+        log.Fatal("WriteNote:",err)
+    }
+    defer outFile.Close()
+
+    // write the file out
+    _,err = outFile.WriteString(n.text + "\n" + n.TagString())
+    if err != nil{
+        log.Fatal("WriteNote:",err)
+    }
+
+
+}
+
+// convert note tags to string
+func (n *Note) TagString() string {
+    return TAGID + " " + strings.Join(n.tags,",")
+
+}
+
+// get text from editor
+func (n *Note) GetTextFromEditor() {
+//http://stackoverflow.com/questions/12088138/trying-to-launch-an-external-editor-from-within-a-go-program
+
+}
+
 
 //******************************************************************************
 // Utility functions
@@ -76,14 +119,16 @@ func NewNote(noteText string, noteName string, tagString string) *Note {
 
 // Parse a tag string into a set of unique tags
 func parseTagString(tagString string) []string {
+
+	// remove tagid
 	startIdx := strings.Index(tagString, TAGID)
+
 	if startIdx == -1 {
 		startIdx = 0
 	} else {
 		startIdx += len(TAGID)
 	}
 
-	// remove tagid
 	tagString = tagString[startIdx:]
 
 	// split into tags
