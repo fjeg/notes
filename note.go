@@ -1,14 +1,19 @@
 package main
 
+// http://blog.gopheracademy.com/vimgo-development-environment
+
 import (
 	"fmt"
-	"github.com/docopt/docopt.go"
+	"io/ioutil"
+	"log"
 	"os"
-//    "os/exec"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	//"syscall"
 	"time"
-    "log"
+
+	"github.com/docopt/docopt.go"
 )
 
 func main() {
@@ -26,6 +31,9 @@ Usage:
 
 	arguments, _ := docopt.Parse(usage, nil, true, "notes_v0.1", false)
 	fmt.Println(arguments)
+
+	n2 := NewNote("correct horse battery staple", "test", "#TAGS t1,t2")
+	n2.GetTextFromEditor()
 }
 
 //******************************************************************************
@@ -36,7 +44,7 @@ const NOTEDIR string = "/Users/fgimenez/Dropbox/notes/"
 const TAGID string = "#TAGS"
 
 //******************************************************************************
-// Struct definition
+// Note definition
 //******************************************************************************
 type Note struct {
 	text string
@@ -45,7 +53,7 @@ type Note struct {
 }
 
 //******************************************************************************
-// Struct Constructors
+// Note Constructors
 //******************************************************************************
 func NewNote(noteText string, noteName string, tagString string) *Note {
 
@@ -61,9 +69,9 @@ func NewNote(noteText string, noteName string, tagString string) *Note {
 		notePath = noteName
 	}
 
-    if _,err := os.Stat(notePath); os.IsExist(err){
-        log.Fatal("Note already exists, choose new name.", notePath)
-    }
+	if _, err := os.Stat(notePath); os.IsExist(err) {
+		log.Fatalf("Note already exists, choose new name.", notePath)
+	}
 
 	// TAGS
 	if tagString == "" {
@@ -82,40 +90,76 @@ func NewNote(noteText string, noteName string, tagString string) *Note {
 // possibly return error in the future
 func (n *Note) WriteNote() {
 
-    //TODO check if file exists and handle name collisions
+	//TODO check if file exists and handle name collisions
 
-    // if not, create the file
-    outFile,err := os.Create(n.path)
-    if err != nil {
-        log.Fatal("WriteNote:",err)
-    }
-    defer outFile.Close()
+	// if not, create the file
+	outFile, err := os.Create(n.path)
+	if err != nil {
+		log.Fatalf("Error in WriteNote:", err)
+	}
+	defer outFile.Close()
 
-    // write the file out
-    _,err = outFile.WriteString(n.text + "\n" + n.TagString())
-    if err != nil{
-        log.Fatal("WriteNote:",err)
-    }
-
+	// write the file out
+	_, err = outFile.WriteString(n.text + "\n" + n.TagString())
+	if err != nil {
+		log.Fatalf("WriteNote:", err)
+	}
 
 }
 
 // convert note tags to string
 func (n *Note) TagString() string {
-    return TAGID + " " + strings.Join(n.tags,",")
+	return TAGID + " " + strings.Join(n.tags, ",")
 
 }
 
 // get text from editor
 func (n *Note) GetTextFromEditor() {
-//http://stackoverflow.com/questions/12088138/trying-to-launch-an-external-editor-from-within-a-go-program
+
+	// create temporary file and write tag string
+	tmp, err := ioutil.TempFile("", "note_")
+	if err != nil {
+		log.Fatalf("Error opening temp file", err)
+	}
+	if _, err := tmp.WriteString(n.TagString()); err != nil {
+		log.Fatalf("Error writing tagstring before editor %v", err)
+	}
+	fpath := tmp.Name()
+	tmp.Close()
+	defer os.Remove(fpath)
+
+	// Run shell command to call editor
+	cmd := exec.Command(EDITOR, fpath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Error in calling editor %v\n", err)
+	}
+
+	// read in file
+	noteBuffer, err := ioutil.ReadFile(fpath)
+	if err != nil {
+		log.Fatalf("Error opening temp file %v\n", err)
+	}
+	noteStr := string(noteBuffer)
+
+	fmt.Println(noteStr)
+
+	// parse note data
+	//noteText, tags = parseNoteString(noteStr)
+
+	//http://stackoverflow.com/questions/12088138/trying-to-launch-an-external-editor-from-within-a-go-program
 
 }
-
 
 //******************************************************************************
 // Utility functions
 //******************************************************************************
+
+// parse full string of note contents
+//func parseNoteString(noteString string) (noteText string, tags []string)
 
 // Parse a tag string into a set of unique tags
 func parseTagString(tagString string) []string {
