@@ -3,6 +3,7 @@ package main
 // http://blog.gopheracademy.com/vimgo-development-environment
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,30 +11,32 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	//"syscall"
 	"time"
-
-	"github.com/docopt/docopt.go"
 )
 
 func main() {
 
 	// define our usage string here
 	// TODO: fix long names
-	usage := `note
-Usage:
-    note [-h] [-m TEXT] [-t TAGS] [-n NAME] 
 
-    -h,--help                   : Show this help message
-    -m TEXT, --message TEXT     : Include note text, if not included will open and editor
-    -t TAGS, --tags TAGS        : include comma separated tags
-    -n NAME, --name NAME        : Name of note file`
+	/*
+			usage := `note
+		Usage:
+		    note [-h] [-m TEXT] [-t TAGS] [-n NAME]
 
-	arguments, _ := docopt.Parse(usage, nil, true, "notes_v0.1", false)
-	fmt.Println(arguments)
+		    -h,--help                   : Show this help message
+		    -m TEXT, --message TEXT     : Include note text, if not included will open and editor
+		    -t TAGS, --tags TAGS        : include comma separated tags
+		    -n NAME, --name NAME        : Name of note file`
+
+			arguments, _ := docopt.Parse(usage, nil, true, "notes_v0.1", false)
+	*/
 
 	n2 := NewNote("correct horse battery staple", "test", "#TAGS t1,t2")
 	n2.GetTextFromEditor()
+	fmt.Print(n2.text)
+	//fmt.Println("*******************")
+	//fmt.Println(n2.ToString())
 }
 
 //******************************************************************************
@@ -121,9 +124,15 @@ func (n *Note) GetTextFromEditor() {
 	if err != nil {
 		log.Fatalf("Error opening temp file", err)
 	}
+
+	if _, err := tmp.WriteString(n.text + "\n"); err != nil {
+		log.Fatalf("Error writing note text before editor %v", err)
+	}
+
 	if _, err := tmp.WriteString(n.TagString()); err != nil {
 		log.Fatalf("Error writing tagstring before editor %v", err)
 	}
+
 	fpath := tmp.Name()
 	tmp.Close()
 	defer os.Remove(fpath)
@@ -138,19 +147,27 @@ func (n *Note) GetTextFromEditor() {
 		log.Fatalf("Error in calling editor %v\n", err)
 	}
 
-	// read in file
+	// read in temp file after editing
 	noteBuffer, err := ioutil.ReadFile(fpath)
 	if err != nil {
 		log.Fatalf("Error opening temp file %v\n", err)
 	}
-	noteStr := string(noteBuffer)
+	noteText, tags := parseNoteString(string(noteBuffer))
+	n.text = noteText
+	n.tags = tags
+}
 
-	fmt.Println(noteStr)
+// convert a note to a convenient string
+func (n *Note) ToString() string {
 
-	// parse note data
-	//noteText, tags = parseNoteString(noteStr)
+	s := n.text
+	s += "\nTags:\t"
 
-	//http://stackoverflow.com/questions/12088138/trying-to-launch-an-external-editor-from-within-a-go-program
+	for _, tag := range n.tags {
+		s += tag + "\t"
+	}
+
+	return s
 
 }
 
@@ -159,21 +176,31 @@ func (n *Note) GetTextFromEditor() {
 //******************************************************************************
 
 // parse full string of note contents
-//func parseNoteString(noteString string) (noteText string, tags []string)
+func parseNoteString(noteString string) (noteText string, tags []string) {
+
+	scanner := bufio.NewScanner(strings.NewReader(noteString))
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		startIdx := strings.Index(line, TAGID)
+
+		if startIdx == -1 {
+			noteText += line + "\n"
+		} else {
+			tags = parseTagString(line)
+		}
+	}
+
+	strings.Trim(noteText, "\r\n")
+
+	return
+}
 
 // Parse a tag string into a set of unique tags
 func parseTagString(tagString string) []string {
 
 	// remove tagid
-	startIdx := strings.Index(tagString, TAGID)
-
-	if startIdx == -1 {
-		startIdx = 0
-	} else {
-		startIdx += len(TAGID)
-	}
-
-	tagString = tagString[startIdx:]
+	tagString = strings.TrimPrefix(tagString, TAGID)
 
 	// split into tags
 	tags := strings.Split(tagString, ",")
